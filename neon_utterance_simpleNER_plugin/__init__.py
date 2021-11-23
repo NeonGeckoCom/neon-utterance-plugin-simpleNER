@@ -37,45 +37,70 @@ from neon_transformers import UtteranceTransformer
 class SimpleNERTagger(UtteranceTransformer):
     def __init__(self, name="simpleNER", priority=50):
         super().__init__(name, priority)
+        # TODO remove this, debug only until user rules are supported
+        #  all predefined extractors should be disabled by default (?)
+        self.config = {"email": True, "dates": True,
+                       "durations": True, "units": True,
+                       "locations": True}
+
+    def extract_user_rules(self, utterance, lang="en-us"):
+        # TODO allow user to define extraction rule in config
+        # this is the main usage of simpleNER
+        return []
+
+    def extract_predefined(self, utterance, lang="en-us"):
+        entities = []
+        # extract emails
+        if self.config.get("email"):
+            for ent in EmailNER().extract_entities(utterance):
+                entities.append(ent.as_json())
+        # extract Nouns
+        if self.config.get("nouns"):
+            for ent in NamesNER().extract_entities(utterance):
+                # HACK TODO fix upstream
+                if ent.value.lower() in ["the"]:
+                    continue
+                entities.append(ent.as_json())
+        # extract numbers
+        if self.config.get("numbers"):
+            for ent in NumberNER().extract_entities(utterance):
+                entities.append(ent.as_json())
+        # extract Dates
+        if self.config.get("dates"):
+            for ent in DateTimeNER().extract_entities(utterance):
+                entities.append(ent.as_json())
+        # extract Durations
+        if self.config.get("durations"):
+            for ent in TimedeltaNER().extract_entities(utterance):
+                entities.append(ent.as_json())
+        # extract quantities
+        if self.config.get("units"):
+            for ent in UnitsNER().extract_entities(utterance):
+                entities.append(ent.as_json())
+        # extract Locations
+        if self.config.get("locations"):
+            for ent in LocationNER().extract_entities(utterance):
+                entities.append(ent.as_json())
+        # nltk entities
+        if self.config.get("nltk"):
+            for ent in NltkNER().extract_entities(utterance):
+                entities.append(ent.as_json())
+        # dbpedia entities
+        if self.config.get("spotlight"):
+            for ent in SpotlightNER().extract_entities(utterance):
+                if float(ent.confidence) < 0.75:
+                    continue
+                entities.append(ent.as_json())
+        return entities
 
     def transform(self, utterances, context=None):
         entities = []
         context = context or {}
         lang = context.get("lang") or self.config.get("lang", "en-us")
         for utterance in utterances:
-            # TODO make configurable
-            # extract emails
-            for ent in EmailNER().extract_entities(utterance):
-                entities.append(ent.as_json())
-            # extract Nouns
-            for ent in NamesNER().extract_entities(utterance):
-                # HACK TODO fix upstream
-                if ent.value.lower() in ["the"]:
-                    continue
-                entities.append(ent.as_json())
-            # extract numbers
-            for ent in NumberNER().extract_entities(utterance):
-                entities.append(ent.as_json())
-            # extract Dates
-            for ent in DateTimeNER().extract_entities(utterance):
-                entities.append(ent.as_json())
-            # extract Durations
-            for ent in TimedeltaNER().extract_entities(utterance):
-                entities.append(ent.as_json())
-            # extract quantities
-            for ent in UnitsNER().extract_entities(utterance):
-                entities.append(ent.as_json())
-            # extract Locations
-            for ent in LocationNER().extract_entities(utterance):
-                entities.append(ent.as_json())
-            # nltk entities
-            for ent in NltkNER().extract_entities(utterance):
-                entities.append(ent.as_json())
-            # dbpedia entities
-            for ent in SpotlightNER().extract_entities(utterance):
-                if float(ent.confidence) < 0.75:
-                    continue
-                entities.append(ent.as_json())
+            entities += self.extract_user_rules(utterance, lang)
+            entities += self.extract_predefined(utterance, lang)
+
         # return unchanged utterances + data
         return utterances, {"entities": entities}
 
