@@ -29,79 +29,125 @@ from simple_NER.annotators.locations_ner import LocationNER
 from simple_NER.annotators.names_ner import NamesNER
 from simple_NER.annotators.nltk_ner import NltkNER
 from simple_NER.annotators.numbers_ner import NumberNER
-from simple_NER.annotators.units_ner import UnitsNER
 from simple_NER.annotators.remote.dbpedia import SpotlightNER
+from simple_NER.annotators.units_ner import UnitsNER
+from simple_NER.rules import RuleNER
+
 from neon_transformers import UtteranceTransformer
 
 
 class SimpleNERTagger(UtteranceTransformer):
     def __init__(self, name="simpleNER", priority=50):
         super().__init__(name, priority)
-        # TODO remove this, debug only until user rules are supported
-        #  all predefined extractors should be disabled by default (?)
-        self.config = {"email": True, "dates": True,
-                       "durations": True, "units": True,
-                       "locations": True}
 
     def extract_user_rules(self, utterance, lang="en-us"):
-        # TODO allow user to define extraction rule in config
-        # this is the main usage of simpleNER
-        return []
+        lang = lang.split("-")[0]
+        entities = []
+        rules = self.config.get("rules", {}).get(lang)
+        if rules:
+            ner = RuleNER()
+            for k, samples in rules.items():
+                ner.add_rule(k, samples)
+            for ent in ner.extract_entities(utterance):
+                entities.append({"entity": ent.entity_type,
+                                 "value": ent.value,
+                                 "source_text": utterance,
+                                 "span": ent.spans[0]})
+        return entities
 
     def extract_predefined(self, utterance, lang="en-us"):
         entities = []
         # extract emails
         if self.config.get("email"):
             for ent in EmailNER().extract_entities(utterance):
-                entities.append(ent.as_json())
+                entities.append({"entity": ent.entity_type,
+                                 "value": ent.value,
+                                 "source_text": utterance,
+                                 "span": ent.spans[0]})
         # extract Nouns
         if self.config.get("nouns"):
             for ent in NamesNER().extract_entities(utterance):
                 # HACK TODO fix upstream
                 if ent.value.lower() in ["the"]:
                     continue
-                entities.append(ent.as_json())
+                entities.append({"entity": ent.entity_type,
+                                 "value": ent.value,
+                                 "source_text": utterance,
+                                 "span": ent.spans[0]})
         # extract numbers
         if self.config.get("numbers"):
             for ent in NumberNER().extract_entities(utterance):
-                entities.append(ent.as_json())
+                entities.append({"entity": ent.entity_type,
+                                 "value": ent.value,
+                                 "source_text": utterance,
+                                 "span": ent.spans[0]})
         # extract Dates
         if self.config.get("dates"):
             for ent in DateTimeNER().extract_entities(utterance):
-                entities.append(ent.as_json())
+                entities.append({"entity": ent.entity_type,
+                                 "value": ent.value,
+                                 "source_text": utterance,
+                                 "span": ent.spans[0]})
         # extract Durations
         if self.config.get("durations"):
             for ent in TimedeltaNER().extract_entities(utterance):
-                entities.append(ent.as_json())
+                entities.append({"entity": ent.entity_type,
+                                 "value": ent.value,
+                                 "source_text": utterance,
+                                 "span": ent.spans[0]})
         # extract quantities
         if self.config.get("units"):
             for ent in UnitsNER().extract_entities(utterance):
-                entities.append(ent.as_json())
+                entities.append({"entity": ent.entity_type,
+                                 "value": ent.value,
+                                 "source_text": utterance,
+                                 "span": ent.spans[0]})
         # extract Locations
         if self.config.get("locations"):
             for ent in LocationNER().extract_entities(utterance):
-                entities.append(ent.as_json())
+                entities.append({"entity": ent.entity_type,
+                                 "value": ent.value,
+                                 "source_text": utterance,
+                                 "span": ent.spans[0]})
         # nltk entities
         if self.config.get("nltk"):
             for ent in NltkNER().extract_entities(utterance):
-                entities.append(ent.as_json())
+                entities.append({"entity": ent.entity_type,
+                                 "value": ent.value,
+                                 "source_text": utterance,
+                                 "span": ent.spans[0]})
         # dbpedia entities
         if self.config.get("spotlight"):
-            for ent in SpotlightNER().extract_entities(utterance):
-                if float(ent.confidence) < 0.75:
-                    continue
-                entities.append(ent.as_json())
+            try:
+                for ent in SpotlightNER().extract_entities(utterance):
+                    if float(ent.confidence) < 0.75:
+                        continue
+                    entities.append({"entity": ent.entity_type,
+                                     "value": ent.value,
+                                     "source_text": utterance,
+                                     "span": ent.spans[0]})
+            except:
+                pass  # unreliable host
         return entities
 
     def transform(self, utterances, context=None):
-        entities = []
+        entities = {}
         context = context or {}
         lang = context.get("lang") or self.config.get("lang", "en-us")
         for utterance in utterances:
-            entities += self.extract_user_rules(utterance, lang)
-            entities += self.extract_predefined(utterance, lang)
+
+            # user defined rules
+            for ent in self.extract_user_rules(utterance, lang):
+                if ent["entity"] not in entities:
+                    entities[ent["entity"]] = []
+                entities[ent["entity"]].append(ent)
+
+            # built in parsers
+            for ent in self.extract_predefined(utterance, lang):
+                if ent["entity"] not in entities:
+                    entities[ent["entity"]] = []
+                entities[ent["entity"]].append(ent)
 
         # return unchanged utterances + data
         return utterances, {"entities": entities}
-
 
