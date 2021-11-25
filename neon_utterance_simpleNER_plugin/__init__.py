@@ -34,9 +34,12 @@ from simple_NER.annotators.units_ner import UnitsNER
 from simple_NER.rules import RuleNER
 
 from neon_transformers import UtteranceTransformer
+from neon_transformers.tasks import UtteranceTask
 
 
 class SimpleNERTagger(UtteranceTransformer):
+    task = UtteranceTask.NER
+
     def __init__(self, name="simpleNER", priority=50):
         super().__init__(name, priority)
 
