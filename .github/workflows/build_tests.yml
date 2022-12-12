@@ -20,7 +20,7 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt install python3-dev swig libssl-dev portaudio19-dev libpulse-dev
+          sudo apt install -y gcc libfann-dev swig libssl-dev portaudio19-dev git libpulse-dev
       - name: Build Distribution Packages
         run: |
           python setup.py bdist_wheel
